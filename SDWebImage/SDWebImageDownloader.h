@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "SDWebImageCompat.h"
 #import "SDWebImageOperation.h"
+#import "SDWebImageURLConverter.h"
 
 typedef NS_OPTIONS(NSUInteger, SDWebImageDownloaderOptions) {
     SDWebImageDownloaderLowPriority = 1 << 0,
@@ -72,7 +73,7 @@ FOUNDATION_EXPORT NSString * _Nonnull const SDWebImageDownloadStopNotification;
 
 typedef void(^SDWebImageDownloaderProgressBlock)(NSInteger receivedSize, NSInteger expectedSize, NSURL * _Nullable targetURL);
 
-typedef void(^SDWebImageDownloaderCompletedBlock)(UIImage * _Nullable image, NSData * _Nullable data, NSError * _Nullable error, BOOL finished);
+typedef void(^SDWebImageDownloaderCompletedBlock)(UIImage * _Nullable image, NSData * _Nullable data, NSError * _Nullable error, BOOL finished, NSDictionary <NSString *, NSString *> * _Nullable headerFields);
 
 typedef NSDictionary<NSString *, NSString *> SDHTTPHeadersDictionary;
 typedef NSMutableDictionary<NSString *, NSString *> SDHTTPHeadersMutableDictionary;
@@ -101,6 +102,8 @@ typedef SDHTTPHeadersDictionary * _Nullable (^SDWebImageDownloaderHeadersFilterB
  * Asynchronous downloader dedicated and optimized for image loading.
  */
 @interface SDWebImageDownloader : NSObject
+
+@property (strong, nonatomic, nullable) id <SDWebImageURLConverter> urlConverter;
 
 /**
  * Decompressing images that are downloaded and cached can improve performance but can consume lot of memory.
@@ -207,6 +210,7 @@ typedef SDHTTPHeadersDictionary * _Nullable (^SDWebImageDownloaderHeadersFilterB
  * @see SDWebImageDownloaderDelegate
  *
  * @param url            The URL to the image to download
+ * @param headerFields   The additional HTTP header fields for the request
  * @param options        The options to be used for this download
  * @param progressBlock  A block called repeatedly while the image is downloading
  *                       @note the progress block is executed on a background queue
@@ -222,6 +226,7 @@ typedef SDHTTPHeadersDictionary * _Nullable (^SDWebImageDownloaderHeadersFilterB
  * @return A token (SDWebImageDownloadToken) that can be passed to -cancel: to cancel this operation
  */
 - (nullable SDWebImageDownloadToken *)downloadImageWithURL:(nullable NSURL *)url
+                                              headerFields:(nullable NSDictionary <NSString *, NSString *> *)headerFields
                                                    options:(SDWebImageDownloaderOptions)options
                                                   progress:(nullable SDWebImageDownloaderProgressBlock)progressBlock
                                                  completed:(nullable SDWebImageDownloaderCompletedBlock)completedBlock;

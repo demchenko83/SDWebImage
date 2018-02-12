@@ -61,7 +61,7 @@
         currentURL = self.prefetchURLs[index];
         self.requestedCount++;
     }
-    [self.manager loadImageWithURL:currentURL options:self.options progress:nil completed:^(UIImage *image, NSData *data, NSError *error, SDImageCacheType cacheType, BOOL finished, NSURL *imageURL) {
+    [self.manager loadImageWithURL:currentURL options:self.options progress:nil completed:^(UIImage * _Nullable image, NSData * _Nullable data, NSError * _Nullable error, SDImageCacheType cacheType, BOOL finished, NSURL * _Nullable imageURL, NSDictionary<NSString *,NSString *> * _Nullable headerFields) {
         if (!finished) return;
         self.finishedCount++;
 

@@ -194,6 +194,7 @@
 }
 
 - (nullable SDWebImageDownloadToken *)downloadImageWithURL:(nullable NSURL *)url
+                                              headerFields:(nullable NSDictionary <NSString *, NSString *> *)headerFields
                                                    options:(SDWebImageDownloaderOptions)options
                                                   progress:(nullable SDWebImageDownloaderProgressBlock)progressBlock
                                                  completed:(nullable SDWebImageDownloaderCompletedBlock)completedBlock {
@@ -208,7 +209,13 @@
 
         // In order to prevent from potential duplicate caching (NSURLCache + SDImageCache) we disable the cache for image requests if told otherwise
         NSURLRequestCachePolicy cachePolicy = options & SDWebImageDownloaderUseNSURLCache ? NSURLRequestUseProtocolCachePolicy : NSURLRequestReloadIgnoringLocalCacheData;
-        NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url
+
+        NSURL *fullURL = url;
+        if(self.urlConverter != nil) {
+            fullURL = [self.urlConverter imageURLFromShortURL:[url absoluteString]];
+        }
+
+        NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:fullURL
                                                                     cachePolicy:cachePolicy
                                                                 timeoutInterval:timeoutInterval];
         
@@ -222,7 +229,12 @@
         }
         SDWebImageDownloaderOperation *operation = [[sself.operationClass alloc] initWithRequest:request inSession:sself.session options:options];
         operation.shouldDecompressImages = sself.shouldDecompressImages;
-        
+        operation.urlConverter = sself.urlConverter;
+
+        [headerFields enumerateKeysAndObjectsUsingBlock:^(NSString * _Nonnull HTTPHeaderField, NSString * _Nonnull value, BOOL * _Nonnull stop) {
+            [request addValue:value forHTTPHeaderField:HTTPHeaderField];
+        }];
+
         if (sself.urlCredential) {
             operation.credential = sself.urlCredential;
         } else if (sself.username && sself.password) {
@@ -269,7 +281,7 @@
     // The URL will be used as the key to the callbacks dictionary so it cannot be nil. If it is nil immediately call the completed block with no image or data.
     if (url == nil) {
         if (completedBlock != nil) {
-            completedBlock(nil, nil, nil, NO);
+            completedBlock(nil, nil, nil, NO, nil);
         }
         return nil;
     }

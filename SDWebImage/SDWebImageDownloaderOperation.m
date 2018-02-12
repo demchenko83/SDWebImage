@@ -50,6 +50,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 
 @implementation SDWebImageDownloaderOperation
 
+@synthesize urlConverter = _urlConverter;
 @synthesize executing = _executing;
 @synthesize finished = _finished;
 
@@ -79,7 +80,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     SDCallbacksDictionary *callbacks = [NSMutableDictionary new];
     if (progressBlock) callbacks[kProgressCallbackKey] = [progressBlock copy];
     if (completedBlock) callbacks[kCompletedCallbackKey] = [completedBlock copy];
-    dispatch_barrier_async(self.barrierQueue, ^{
+    dispatch_barrier_sync(self.barrierQueue, ^{
         [self.callbackBlocks addObject:callbacks];
     });
     return callbacks;
@@ -184,14 +185,18 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
         }
 #pragma clang diagnostic pop
         for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
-            progressBlock(0, NSURLResponseUnknownLength, self.request.URL);
+            NSURL *shortURL = self.request.URL;
+            if(self.urlConverter != nil) {
+                shortURL = [NSURL URLWithString:[self.urlConverter shortUrlFromImageURL:shortURL]];
+            }
+            progressBlock(0, NSURLResponseUnknownLength, shortURL);
         }
         __weak typeof(self) weakSelf = self;
         dispatch_async(dispatch_get_main_queue(), ^{
             [[NSNotificationCenter defaultCenter] postNotificationName:SDWebImageDownloadStartNotification object:weakSelf];
         });
     } else {
-        [self callCompletionBlocksWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorUnknown userInfo:@{NSLocalizedDescriptionKey : @"Task can't be initialized"}]];
+        [self callCompletionBlocksWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorUnknown userInfo:@{NSLocalizedDescriptionKey : @"Task can't be initialized"}] headerFields:nil];
         [self done];
         return;
     }
@@ -243,7 +248,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 
 - (void)reset {
     __weak typeof(self) weakSelf = self;
-    dispatch_barrier_async(self.barrierQueue, ^{
+    dispatch_barrier_sync(self.barrierQueue, ^{
         [weakSelf.callbackBlocks removeAllObjects];
     });
     self.dataTask = nil;
@@ -291,7 +296,11 @@ didReceiveResponse:(NSURLResponse *)response
     
     if (valid) {
         for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
-            progressBlock(0, expected, self.request.URL);
+            NSURL *shortURL = self.request.URL;
+            if(self.urlConverter != nil) {
+                shortURL = [NSURL URLWithString:[self.urlConverter shortUrlFromImageURL:shortURL]];
+            }
+            progressBlock(0, expected, shortURL);
         }
     } else {
         // Status code invalid and marked as cancelled. Do not call `[self.dataTask cancel]` which may mass up URLSession life cycle
@@ -340,13 +349,22 @@ didReceiveResponse:(NSURLResponse *)response
             if (self.shouldDecompressImages) {
                 image = [[SDWebImageCodersManager sharedInstance] decompressedImageWithImage:image data:&data options:@{SDWebImageCoderScaleDownLargeImagesKey: @(NO)}];
             }
-            
-            [self callCompletionBlocksWithImage:image imageData:nil error:nil finished:NO];
+
+            NSDictionary <NSString *, NSString *> *headerFields = nil;
+            if([dataTask.response isKindOfClass:[NSHTTPURLResponse class]]) {
+                headerFields = [(NSHTTPURLResponse *)dataTask.response allHeaderFields];
+            }
+
+            [self callCompletionBlocksWithImage:image imageData:nil error:nil finished:NO headerFields:headerFields];
         }
     }
 
     for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
-        progressBlock(self.imageData.length, self.expectedSize, self.request.URL);
+        NSURL *shortURL = self.request.URL;
+        if(self.urlConverter != nil) {
+            shortURL = [NSURL URLWithString:[self.urlConverter shortUrlFromImageURL:shortURL]];
+        }
+        progressBlock(self.imageData.length, self.expectedSize, shortURL);
     }
 }
 
@@ -379,9 +397,14 @@ didReceiveResponse:(NSURLResponse *)response
             }
         });
     }
+
+    NSDictionary <NSString *, NSString *> *headerFields = nil;
+    if([task.response isKindOfClass:[NSHTTPURLResponse class]]) {
+        headerFields = [(NSHTTPURLResponse *)task.response allHeaderFields];
+    }
     
     if (error) {
-        [self callCompletionBlocksWithError:error];
+        [self callCompletionBlocksWithError:error headerFields:headerFields];
     } else {
         if ([self callbacksForKey:kCompletedCallbackKey].count > 0) {
             /**
@@ -394,7 +417,7 @@ didReceiveResponse:(NSURLResponse *)response
                  */
                 if (self.options & SDWebImageDownloaderIgnoreCachedResponse && [self.cachedData isEqualToData:imageData]) {
                     // call completion block with nil
-                    [self callCompletionBlocksWithImage:nil imageData:nil error:nil finished:YES];
+                    [self callCompletionBlocksWithImage:nil imageData:nil error:nil finished:YES headerFields:headerFields];
                 } else {
                     UIImage *image = [[SDWebImageCodersManager sharedInstance] decodedImageWithData:imageData];
                     NSString *key = [[SDWebImageManager sharedManager] cacheKeyForURL:self.request.URL];
@@ -421,13 +444,13 @@ didReceiveResponse:(NSURLResponse *)response
                     }
                     CGSize imageSize = image.size;
                     if (imageSize.width == 0 || imageSize.height == 0) {
-                        [self callCompletionBlocksWithError:[NSError errorWithDomain:SDWebImageErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey : @"Downloaded image has 0 pixels"}]];
+                        [self callCompletionBlocksWithError:[NSError errorWithDomain:SDWebImageErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey : @"Downloaded image has 0 pixels"}] headerFields:headerFields];
                     } else {
-                        [self callCompletionBlocksWithImage:image imageData:imageData error:nil finished:YES];
+                        [self callCompletionBlocksWithImage:image imageData:imageData error:nil finished:YES headerFields:headerFields];
                     }
                 }
             } else {
-                [self callCompletionBlocksWithError:[NSError errorWithDomain:SDWebImageErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey : @"Image data is nil"}]];
+                [self callCompletionBlocksWithError:[NSError errorWithDomain:SDWebImageErrorDomain code:0 userInfo:@{NSLocalizedDescriptionKey : @"Image data is nil"}] headerFields:headerFields];
             }
         }
     }
@@ -473,18 +496,20 @@ didReceiveResponse:(NSURLResponse *)response
     return self.options & SDWebImageDownloaderContinueInBackground;
 }
 
-- (void)callCompletionBlocksWithError:(nullable NSError *)error {
-    [self callCompletionBlocksWithImage:nil imageData:nil error:error finished:YES];
+- (void)callCompletionBlocksWithError:(nullable NSError *)error
+                         headerFields:(nullable NSDictionary <NSString *, NSString *> *)headerFields {
+    [self callCompletionBlocksWithImage:nil imageData:nil error:error finished:YES headerFields:headerFields];
 }
 
 - (void)callCompletionBlocksWithImage:(nullable UIImage *)image
                             imageData:(nullable NSData *)imageData
                                 error:(nullable NSError *)error
-                             finished:(BOOL)finished {
+                             finished:(BOOL)finished
+                         headerFields:(nullable NSDictionary <NSString *, NSString *> *)headerFields {
     NSArray<id> *completionBlocks = [self callbacksForKey:kCompletedCallbackKey];
     dispatch_main_async_safe(^{
         for (SDWebImageDownloaderCompletedBlock completedBlock in completionBlocks) {
-            completedBlock(image, imageData, error, finished);
+            completedBlock(image, imageData, error, finished, headerFields);
         }
     });
 }

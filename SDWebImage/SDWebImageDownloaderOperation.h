@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "SDWebImageDownloader.h"
 #import "SDWebImageOperation.h"
+#import "SDWebImageURLConverter.h"
 
 FOUNDATION_EXPORT NSString * _Nonnull const SDWebImageDownloadStartNotification;
 FOUNDATION_EXPORT NSString * _Nonnull const SDWebImageDownloadReceiveResponseNotification;
@@ -22,6 +23,8 @@ FOUNDATION_EXPORT NSString * _Nonnull const SDWebImageDownloadFinishNotification
  For the description about these methods, see `SDWebImageDownloaderOperation`
  */
 @protocol SDWebImageDownloaderOperationInterface<NSObject>
+
+@property(nonatomic, strong, nullable) id <SDWebImageURLConverter> urlConverter;
 
 - (nonnull instancetype)initWithRequest:(nullable NSURLRequest *)request
                               inSession:(nullable NSURLSession *)session
