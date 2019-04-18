@@ -53,12 +53,15 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 @property (assign, nonatomic) UIBackgroundTaskIdentifier backgroundTaskId;
 #endif
 
+@property (strong, nonatomic, nullable) NSURL *convertedURL;
+
 @end
 
 @implementation SDWebImageDownloaderOperation
 
 @synthesize executing = _executing;
 @synthesize finished = _finished;
+@synthesize urlConverter = _urlConverter;
 
 - (nonnull instancetype)init {
     return [self initWithRequest:nil inSession:nil options:0];
@@ -190,9 +193,16 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
             }
         }
 #pragma clang diagnostic pop
+        
+        if(self.urlConverter != nil) {
+            self.convertedURL = [NSURL URLWithString:[self.urlConverter shortUrlFromImageURL:self.request.URL]];
+        } else {
+            self.convertedURL = self.request.URL;
+        }
+        
         [self.dataTask resume];
         for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
-            progressBlock(0, NSURLResponseUnknownLength, self.request.URL);
+            progressBlock(0, NSURLResponseUnknownLength, self.convertedURL);
         }
         __block typeof(self) strongSelf = self;
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -301,7 +311,7 @@ didReceiveResponse:(NSURLResponse *)response
     
     if (valid) {
         for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
-            progressBlock(0, expected, self.request.URL);
+            progressBlock(0, expected, self.convertedURL);
         }
     } else {
         // Status code invalid and marked as cancelled. Do not call `[self.dataTask cancel]` which may mass up URLSession life cycle
@@ -327,7 +337,7 @@ didReceiveResponse:(NSURLResponse *)response
     if (self.expectedSize == 0) {
         // Unknown expectedSize, immediately call progressBlock and return
         for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
-            progressBlock(self.receivedSize, self.expectedSize, self.request.URL);
+            progressBlock(self.receivedSize, self.expectedSize, self.convertedURL);
         }
         return;
     }
@@ -351,7 +361,7 @@ didReceiveResponse:(NSURLResponse *)response
         // progressive decode the image in coder queue
         dispatch_async(self.coderQueue, ^{
             @autoreleasepool {
-                UIImage *image = SDImageLoaderDecodeProgressiveImageData(imageData, self.request.URL, finished, self, [[self class] imageOptionsFromDownloaderOptions:self.options], self.context);
+                UIImage *image = SDImageLoaderDecodeProgressiveImageData(imageData, self.convertedURL, finished, self, [[self class] imageOptionsFromDownloaderOptions:self.options], self.context);
                 if (image) {
                     // We do not keep the progressive decoding image even when `finished`=YES. Because they are for view rendering but not take full function from downloader options. And some coders implementation may not keep consistent between progressive decoding and normal decoding.
                     
@@ -362,7 +372,7 @@ didReceiveResponse:(NSURLResponse *)response
     }
     
     for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
-        progressBlock(self.receivedSize, self.expectedSize, self.request.URL);
+        progressBlock(self.receivedSize, self.expectedSize, self.convertedURL);
     }
 }
 
@@ -421,7 +431,7 @@ didReceiveResponse:(NSURLResponse *)response
                     // decode the image in coder queue
                     dispatch_async(self.coderQueue, ^{
                         @autoreleasepool {
-                            UIImage *image = SDImageLoaderDecodeImageData(imageData, self.request.URL, [[self class] imageOptionsFromDownloaderOptions:self.options], self.context);
+                            UIImage *image = SDImageLoaderDecodeImageData(imageData, self.convertedURL, [[self class] imageOptionsFromDownloaderOptions:self.options], self.context);
                             CGSize imageSize = image.size;
                             if (imageSize.width == 0 || imageSize.height == 0) {
                                 [self callCompletionBlocksWithError:[NSError errorWithDomain:SDWebImageErrorDomain code:SDWebImageErrorBadImageData userInfo:@{NSLocalizedDescriptionKey : @"Downloaded image has 0 pixels"}]];

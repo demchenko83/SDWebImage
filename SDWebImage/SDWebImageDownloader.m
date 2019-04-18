@@ -260,9 +260,14 @@ static void * SDWebImageDownloaderContext = &SDWebImageDownloaderContext;
         timeoutInterval = 15.0;
     }
     
+    NSURL *urlToUse = url;
+    if(self.urlConverter != nil) {
+        urlToUse = [self.urlConverter imageURLFromShortURL:[url absoluteString]];
+    }
+    
     // In order to prevent from potential duplicate caching (NSURLCache + SDImageCache) we disable the cache for image requests if told otherwise
     NSURLRequestCachePolicy cachePolicy = options & SDWebImageDownloaderUseNSURLCache ? NSURLRequestUseProtocolCachePolicy : NSURLRequestReloadIgnoringLocalCacheData;
-    NSMutableURLRequest *mutableRequest = [[NSMutableURLRequest alloc] initWithURL:url cachePolicy:cachePolicy timeoutInterval:timeoutInterval];
+    NSMutableURLRequest *mutableRequest = [[NSMutableURLRequest alloc] initWithURL:urlToUse cachePolicy:cachePolicy timeoutInterval:timeoutInterval];
     mutableRequest.HTTPShouldHandleCookies = (options & SDWebImageDownloaderHandleCookies);
     mutableRequest.HTTPShouldUsePipelining = YES;
     SD_LOCK(self.HTTPHeadersLock);
@@ -311,6 +316,10 @@ static void * SDWebImageDownloaderContext = &SDWebImageDownloaderContext;
         operation.queuePriority = NSOperationQueuePriorityHigh;
     } else if (options & SDWebImageDownloaderLowPriority) {
         operation.queuePriority = NSOperationQueuePriorityLow;
+    }
+    
+    if([operation respondsToSelector:@selector(setUrlConverter:)]) {
+        operation.urlConverter = self.urlConverter;
     }
     
     if (self.config.executionOrder == SDWebImageDownloaderLIFOExecutionOrder) {

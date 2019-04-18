@@ -13,6 +13,7 @@
 #import "SDWebImageDownloaderConfig.h"
 #import "SDWebImageDownloaderRequestModifier.h"
 #import "SDImageLoader.h"
+#import "SDWebImageURLConverter.h"
 
 typedef NS_OPTIONS(NSUInteger, SDWebImageDownloaderOptions) {
     /**
@@ -125,6 +126,8 @@ typedef SDImageLoaderCompletedBlock SDWebImageDownloaderCompletedBlock;
  * Asynchronous downloader dedicated and optimized for image loading.
  */
 @interface SDWebImageDownloader : NSObject
+
+@property (nonatomic, strong, nullable) id <SDWebImageURLConverter> urlConverter;
 
 /**
  * Downloader Config object - storing all kind of settings.

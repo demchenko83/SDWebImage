@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "SDWebImageDownloader.h"
 #import "SDWebImageOperation.h"
+#import "SDWebImageURLConverter.h"
 
 /**
  Describes a downloader operation. If one wants to use a custom downloader op, it needs to inherit from `NSOperation` and conform to this protocol
@@ -38,6 +39,7 @@
 @property (strong, nonatomic, readonly, nullable) NSURLSessionTask *dataTask;
 @property (strong, nonatomic, nullable) NSURLCredential *credential;
 @property (assign, nonatomic) double minimumProgressInterval;
+@property (strong, nonatomic, nullable) id <SDWebImageURLConverter> urlConverter;
 
 @end
 
